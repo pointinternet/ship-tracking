@@ -22,6 +22,7 @@ function connectAIS() {
       BoundingBoxes: [[[-90, -180], [90, 180]]],
       FilterMessageTypes: ["PositionReport"]
     }));
+      console.log("📡 Subscription sent");
   });
 
   ais.on("message", (data) => {
