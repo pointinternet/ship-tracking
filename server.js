@@ -36,11 +36,6 @@ function connectAIS() {
       if (msg.MessageType === "PositionReport") {
         const s = msg.Message.PositionReport;
 
-        const lat = s.Latitude;
-        const lng = s.Longitude;
-
-        // ✅ INDIA FILTER
-  if (lat >= 5 && lat <= 30 && lng >= 65 && lng <= 95) {
 
         ships[s.UserID] = {
           mmsi: s.UserID,
