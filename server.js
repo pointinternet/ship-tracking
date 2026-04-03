@@ -5,11 +5,12 @@ const cors = require("cors");
 const app = express();
 app.use(cors());
 
+const PORT = process.env.PORT || 5000;
+
+// Store ships
 let ships = {};
 
-function connectAIS() {
-  const ais = new WebSocket("wss://stream.aisstream.io/v0/stream");
-
+// ✅ AIS CONNECTION WITH AUTO RECONNECT
 function connectAIS() {
   const ais = new WebSocket("wss://stream.aisstream.io/v0/stream");
 
@@ -24,19 +25,23 @@ function connectAIS() {
   });
 
   ais.on("message", (data) => {
-    const msg = JSON.parse(data);
+    try {
+      const msg = JSON.parse(data);
 
-    if (msg.MessageType === "PositionReport") {
-      const s = msg.Message.PositionReport;
+      if (msg.MessageType === "PositionReport") {
+        const s = msg.Message.PositionReport;
 
-      ships[s.UserID] = {
-        mmsi: s.UserID,
-        lat: s.Latitude,
-        lng: s.Longitude,
-        speed: s.Sog
-      };
+        ships[s.UserID] = {
+          mmsi: s.UserID,
+          lat: s.Latitude,
+          lng: s.Longitude,
+          speed: s.Sog
+        };
 
-      console.log("🚢 Ships:", Object.keys(ships).length);
+        console.log("🚢 Ships:", Object.keys(ships).length);
+      }
+    } catch (err) {
+      console.log("Parse error:", err.message);
     }
   });
 
@@ -51,5 +56,23 @@ function connectAIS() {
   });
 }
 
-// ✅ CALL FUNCTION
+// 🔥 Start AIS
 connectAIS();
+
+// ✅ API ROUTES
+app.get("/", (req, res) => {
+  res.send("🚢 Ship Tracker API Running");
+});
+
+app.get("/ships", (req, res) => {
+  res.json(Object.values(ships));
+});
+
+app.get("/status", (req, res) => {
+  res.json({ ships: Object.keys(ships).length });
+});
+
+// ✅ START SERVER
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
