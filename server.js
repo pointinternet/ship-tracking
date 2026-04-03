@@ -33,7 +33,9 @@ ais.on("message", (data) => {
     };
   }
 });
-
+app.get("/", (req, res) => {
+  res.send("🚢 Ship Tracker API is Running");
+});
 app.get("/ships", (req, res) => {
   res.json(Object.values(ships));
 });
