@@ -14,7 +14,7 @@ ais.on("open", () => {
 
   ais.send(JSON.stringify({
     APIKey: process.env.AIS_KEY,
-    BoundingBoxes: [[[-90, -180], [90, 180]]],
+    BoundingBoxes: [[[0, 60], [40, 100]]],
     FilterMessageTypes: ["PositionReport"]
   }));
 });
