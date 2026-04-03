@@ -10,6 +10,9 @@ let ships = {};
 function connectAIS() {
   const ais = new WebSocket("wss://stream.aisstream.io/v0/stream");
 
+function connectAIS() {
+  const ais = new WebSocket("wss://stream.aisstream.io/v0/stream");
+
   ais.on("open", () => {
     console.log("✅ Connected to AIS");
 
@@ -48,27 +51,5 @@ function connectAIS() {
   });
 }
 
-// 👇 IMPORTANT: CALL THE FUNCTION
+// ✅ CALL FUNCTION
 connectAIS();
-ais.on("message", (data) => {
-  const msg = JSON.parse(data);
-
-  if (msg.MessageType === "PositionReport") {
-    const s = msg.Message.PositionReport;
-
-    ships[s.UserID] = {
-      mmsi: s.UserID,
-      lat: s.Latitude,
-      lng: s.Longitude,
-      speed: s.Sog
-    };
-  }
-});
-app.get("/", (req, res) => {
-  res.send("🚢 Ship Tracker API is Running");
-});
-app.get("/ships", (req, res) => {
-  res.json(Object.values(ships));
-});
-
-app.listen(5000, () => console.log("Server running"));
