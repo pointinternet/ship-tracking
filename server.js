@@ -10,7 +10,7 @@ const PORT = process.env.PORT || 5000;
 // Store ships
 let ships = {};
 
-// ✅ AIS CONNECTION WITH AUTO RECONNECT
+// ✅ AIS CONNECTION WITH DEBUG + AUTO RECONNECT
 function connectAIS() {
   const ais = new WebSocket("wss://stream.aisstream.io/v0/stream");
 
@@ -22,11 +22,15 @@ function connectAIS() {
       BoundingBoxes: [[[-90, -180], [90, 180]]],
       FilterMessageTypes: ["PositionReport"]
     }));
-      console.log("📡 Subscription sent");
+
+    console.log("📡 Subscription sent");
   });
 
   ais.on("message", (data) => {
     try {
+      // 🔥 RAW DATA LOG (VERY IMPORTANT)
+      console.log("RAW DATA:", data.toString());
+
       const msg = JSON.parse(data);
 
       if (msg.MessageType === "PositionReport") {
@@ -41,8 +45,9 @@ function connectAIS() {
 
         console.log("🚢 Ships:", Object.keys(ships).length);
       }
+
     } catch (err) {
-      console.log("Parse error:", err.message);
+      console.log("❌ Parse error:", err.message);
     }
   });
 
@@ -57,10 +62,10 @@ function connectAIS() {
   });
 }
 
-// 🔥 Start AIS
+// 🚀 Start AIS
 connectAIS();
 
-// ✅ API ROUTES
+// ✅ ROUTES
 app.get("/", (req, res) => {
   res.send("🚢 Ship Tracker API Running");
 });
