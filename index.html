@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -566,6 +567,46 @@
       to { opacity: 1; transform: translateX(0); }
     }
     .vessel-item { animation: slideIn 0.2s ease; }
+
+    /* Debug Console */
+    .debug-console {
+      position: fixed;
+      bottom: 26px;
+      left: 300px;
+      right: 280px;
+      height: 160px;
+      background: rgba(4,8,15,0.97);
+      border: 1px solid var(--border2);
+      border-bottom: none;
+      z-index: 500;
+      display: flex;
+      flex-direction: column;
+      font-family: var(--mono);
+      font-size: 11px;
+      transition: height 0.2s;
+    }
+    .debug-console.collapsed { height: 28px; overflow: hidden; }
+    .debug-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px;
+      height: 28px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      cursor: pointer;
+      user-select: none;
+    }
+    .debug-title { color: var(--yellow); letter-spacing: 2px; font-size: 10px; }
+    .debug-log { flex: 1; overflow-y: auto; padding: 6px 10px; }
+    .debug-log::-webkit-scrollbar { width: 2px; }
+    .debug-log::-webkit-scrollbar-thumb { background: var(--border2); }
+    .dl-line { line-height: 1.9; }
+    .dl-line.info  { color: var(--text); }
+    .dl-line.warn  { color: var(--yellow); }
+    .dl-line.muted { color: var(--muted); }
+    .dl-line.good  { color: var(--green); }
+    .dl-ts { color: var(--muted); margin-right: 8px; }
   </style>
 </head>
 <body>
@@ -618,7 +659,7 @@
     <div class="api-section">
       <div class="field-label">AISStream.io API Key</div>
       <div class="api-input-wrap">
-        <input type="password" id="api-key-input" placeholder="afa3b359827c6113d7a5523797a488e26c2504b3" autocomplete="off"/>
+        <input type="password" id="api-key-input" placeholder="Paste your API key..." autocomplete="off"/>
         <button class="btn" id="connect-btn" onclick="toggleConnect()">CONNECT</button>
       </div>
       <div style="margin-top:8px; display:flex; gap:6px; align-items:center;">
@@ -731,6 +772,17 @@
 
 </div>
 
+<!-- DEBUG CONSOLE -->
+<div class="debug-console" id="debug-console">
+  <div class="debug-toolbar" onclick="toggleDebug()">
+    <span class="debug-title">⬛ DEBUG CONSOLE</span>
+    <span id="debug-toggle-label" style="color:var(--muted);font-size:10px;">▼ HIDE</span>
+  </div>
+  <div class="debug-log" id="debug-log">
+    <div class="dl-line muted"><span class="dl-ts">--:--:--</span>Debug console ready. Connect your API key to see live diagnostics.</div>
+  </div>
+</div>
+
 <!-- STATUS BAR -->
 <div class="status-bar">
   <div class="sb-item">SOURCE: <span>AISStream.io WebSocket</span></div>
@@ -740,6 +792,28 @@
 </div>
 
 <script>
+let noMsgTimer = null;
+
+// ── DEBUG CONSOLE ──
+let debugCollapsed = false;
+function toggleDebug() {
+  debugCollapsed = !debugCollapsed;
+  document.getElementById('debug-console').classList.toggle('collapsed', debugCollapsed);
+  document.getElementById('debug-toggle-label').textContent = debugCollapsed ? '▲ SHOW' : '▼ HIDE';
+}
+
+function debug(msg, type = 'info') {
+  const log = document.getElementById('debug-log');
+  const now = new Date();
+  const ts = `${String(now.getUTCHours()).padStart(2,'0')}:${String(now.getUTCMinutes()).padStart(2,'0')}:${String(now.getUTCSeconds()).padStart(2,'0')}`;
+  const el = document.createElement('div');
+  el.className = `dl-line ${type}`;
+  el.innerHTML = `<span class="dl-ts">${ts}</span>${msg}`;
+  log.appendChild(el);
+  log.scrollTop = log.scrollHeight;
+  while (log.children.length > 100) log.removeChild(log.firstChild);
+}
+
 // ───────────────────────────────────────────────
 // MAP INIT
 // ───────────────────────────────────────────────
@@ -796,23 +870,27 @@ function connect() {
   setConnStatus('connecting');
   document.getElementById('connect-btn').textContent = 'CONNECTING...';
   document.getElementById('connect-btn').disabled = true;
+  debug(`Connecting to wss://stream.aisstream.io/v0/stream ...`, 'info');
+  debug(`API key length: ${key.length} chars`, 'muted');
 
   ws = new WebSocket('wss://stream.aisstream.io/v0/stream');
 
   ws.onopen = () => {
+    // IMPORTANT: Must send subscription within 3 seconds of open
     setConnStatus('connected');
     document.getElementById('connect-btn').textContent = 'DISCONNECT';
     document.getElementById('connect-btn').disabled = false;
     document.getElementById('connect-btn').classList.add('red');
 
-    // Subscribe — global bounding boxes (covers major shipping lanes)
+    // AISStream accepts "APIKey" — send immediately
     const sub = {
       APIKey: key,
-      BoundingBoxes: [
-        [[-90, -180], [90, 180]]   // whole world; narrow this for better performance
-      ],
+      BoundingBoxes: [[[-90, -180], [90, 180]]],
       FilterMessageTypes: ["PositionReport", "ShipStaticData"]
     };
+
+    debug('WS OPEN — sending subscription immediately...', 'info');
+    debug('Payload: ' + JSON.stringify(sub).substring(0, 80) + '...', 'muted');
     ws.send(JSON.stringify(sub));
     addLog('SYSTEM', 'Subscribed to global AIS feed');
 
@@ -821,31 +899,51 @@ function connect() {
       document.getElementById('stat-rate').textContent = tmpCount + '/s';
       tmpCount = 0;
     }, 1000);
+
+    // If no messages after 8s, warn user
+    noMsgTimer = setTimeout(() => {
+      if (msgCount === 0) {
+        debug('⚠ No messages received after 8s. Possible causes: invalid API key, key not activated yet, or account issue.', 'warn');
+        debug('👉 Check: aisstream.io dashboard → make sure key is active', 'warn');
+      }
+    }, 8000);
   };
 
   ws.onmessage = e => {
     try {
       const data = JSON.parse(e.data);
+      if (msgCount === 0) {
+        debug('✅ First AIS message received! API key is valid and working.', 'good');
+        clearTimeout(noMsgTimer);
+      }
       handleMessage(data);
       msgCount++;
       tmpCount++;
       document.getElementById('stat-msgs').textContent = msgCount.toLocaleString();
-    } catch {}
+    } catch(err) {
+      debug('Parse error: ' + err.message, 'warn');
+    }
   };
 
-  ws.onerror = () => {
+  ws.onerror = (err) => {
     setConnStatus('error');
-    addLog('ERROR', 'WebSocket error — check API key');
+    debug('❌ WebSocket error fired. This usually means the server rejected the connection.', 'warn');
+    debug('→ Double-check your API key has no extra spaces', 'warn');
+    addLog('ERROR', 'WebSocket error');
   };
 
-  ws.onclose = () => {
+  ws.onclose = (e) => {
     setConnStatus('disconnected');
     document.getElementById('connect-btn').textContent = 'CONNECT';
     document.getElementById('connect-btn').disabled = false;
     document.getElementById('connect-btn').classList.remove('red');
     clearInterval(rateInterval);
+    clearTimeout(noMsgTimer);
     document.getElementById('stat-rate').textContent = '0/s';
-    addLog('SYSTEM', 'Connection closed');
+    debug(`Connection closed — code: ${e.code}, reason: "${e.reason || 'none'}"`, e.code === 1000 ? 'info' : 'warn');
+    if (e.code === 1008) debug('Code 1008 = Policy violation → invalid API key', 'warn');
+    if (e.code === 1006) debug('Code 1006 = Abnormal closure → possible network/CORS issue', 'warn');
+    addLog('SYSTEM', `Connection closed (code ${e.code})`);
   };
 }
 
