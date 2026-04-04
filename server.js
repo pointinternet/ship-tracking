@@ -19,7 +19,7 @@ function connectAIS() {
 
     ais.send(JSON.stringify({
       APIKey: process.env.AIS_KEY,
-      BoundingBoxes: [[[ 15, 40], [30, 150]]],
+      BoundingBoxes: [[[ 10, -50], [30, 150]]],
       FilterMessageTypes: ["PositionReport"]
     }));
 
